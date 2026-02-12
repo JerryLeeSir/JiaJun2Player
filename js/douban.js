@@ -568,17 +568,19 @@ function _doubanNormalizeCoverUrl(url) {
 }
 
 async function _doubanSearchFirstCoverFromVideoSources(title) {
-    const normalizedTitle = _doubanNormalizeTitleForSearch(title);
-    if (!normalizedTitle) return null;
+    const rawTitle = (title || '').toString().trim();
+    const normalizedTitle = _doubanNormalizeTitleForSearch(rawTitle);
+    const cacheKey = normalizedTitle || rawTitle;
 
-    if (_doubanTitleToCoverCache.has(normalizedTitle)) {
-        return _doubanTitleToCoverCache.get(normalizedTitle);
+    if (!cacheKey) return null;
+
+    // 命中缓存直接返回（无论是命中封面还是命中 null，都避免重复请求）
+    if (_doubanTitleToCoverCache.has(cacheKey)) {
+        return _doubanTitleToCoverCache.get(cacheKey);
     }
 
-    // 只用当前用户选中的 API 源；如果没选则回退用默认源（保持与站内搜索一致）
-    const apiIds = (typeof selectedAPIs !== 'undefined' && Array.isArray(selectedAPIs) && selectedAPIs.length > 0)
-        ? selectedAPIs
-        : ['maotai'];
+    // 首页封面固定走茅台源，避免豆瓣封面字段失效
+    const apiIds = ['maotai'];
 
     // 如果 searchByAPIAndKeyWord 不存在，直接返回 null（避免报错）
     if (typeof searchByAPIAndKeyWord !== 'function') {
@@ -590,12 +592,27 @@ async function _doubanSearchFirstCoverFromVideoSources(title) {
     const coverUrl = await _doubanEnqueueCoverTask(async () => {
         for (const apiId of apiIds) {
             try {
-                const results = await searchByAPIAndKeyWord(apiId, normalizedTitle);
-                if (Array.isArray(results) && results.length > 0) {
-                    const first = results[0];
-                    const pic = _doubanNormalizeCoverUrl(first?.vod_pic);
-                    if (pic) {
-                        return pic;
+                // 1. 先用归一化标题搜索（更干净，命中率通常更高）
+                if (normalizedTitle) {
+                    const results = await searchByAPIAndKeyWord(apiId, normalizedTitle);
+                    if (Array.isArray(results) && results.length > 0) {
+                        const first = results[0];
+                        const pic = _doubanNormalizeCoverUrl(first?.vod_pic);
+                        if (pic) {
+                            return pic;
+                        }
+                    }
+                }
+
+                // 2. 归一化标题没命中时，再用原始标题兜底搜索一次
+                if (rawTitle && rawTitle !== normalizedTitle) {
+                    const rawResults = await searchByAPIAndKeyWord(apiId, rawTitle);
+                    if (Array.isArray(rawResults) && rawResults.length > 0) {
+                        const firstRaw = rawResults[0];
+                        const rawPic = _doubanNormalizeCoverUrl(firstRaw?.vod_pic);
+                        if (rawPic) {
+                            return rawPic;
+                        }
                     }
                 }
             } catch (e) {
@@ -605,7 +622,7 @@ async function _doubanSearchFirstCoverFromVideoSources(title) {
         return null;
     });
 
-    _doubanTitleToCoverCache.set(normalizedTitle, coverUrl);
+    _doubanTitleToCoverCache.set(cacheKey, coverUrl);
     return coverUrl;
 }
 
