@@ -499,11 +499,117 @@ async function fetchDoubanData(url) {
     }
 }
 
+// ==============================
+// 豆瓣热门封面：使用视频源封面替换
+// ==============================
+
+// 轻量并发控制，避免一次性触发过多搜索请求
+const DOUBAN_COVER_FETCH_CONCURRENCY = 4;
+let _doubanCoverActiveCount = 0;
+const _doubanCoverPendingQueue = [];
+
+// 标题 -> 封面URL 的缓存（会话级；刷新页面会丢失）
+const _doubanTitleToCoverCache = new Map();
+
+function _doubanRunNextCoverTask() {
+    while (_doubanCoverActiveCount < DOUBAN_COVER_FETCH_CONCURRENCY && _doubanCoverPendingQueue.length > 0) {
+        const task = _doubanCoverPendingQueue.shift();
+        _doubanCoverActiveCount++;
+        task()
+            .catch(() => {})
+            .finally(() => {
+                _doubanCoverActiveCount--;
+                _doubanRunNextCoverTask();
+            });
+    }
+}
+
+function _doubanEnqueueCoverTask(fn) {
+    return new Promise((resolve, reject) => {
+        _doubanCoverPendingQueue.push(async () => {
+            try {
+                const res = await fn();
+                resolve(res);
+            } catch (e) {
+                reject(e);
+            }
+        });
+        _doubanRunNextCoverTask();
+    });
+}
+
+function _doubanNormalizeTitleForSearch(title) {
+    return (title || '')
+        .toString()
+        .trim()
+        // 常见的片名后缀处理：去掉括号内容
+        .replace(/\s*[（(].*?[)）]\s*$/g, '')
+        // 去掉季/集/期等尾巴（尽量保守）
+        .replace(/\s*(第\s*\d+\s*(季|集|期))\s*$/g, '')
+        .trim();
+}
+
+async function _doubanSearchFirstCoverFromVideoSources(title) {
+    const normalizedTitle = _doubanNormalizeTitleForSearch(title);
+    if (!normalizedTitle) return null;
+
+    if (_doubanTitleToCoverCache.has(normalizedTitle)) {
+        return _doubanTitleToCoverCache.get(normalizedTitle);
+    }
+
+    // 只用当前用户选中的 API 源；如果没选则回退用默认源（保持与站内搜索一致）
+    const apiIds = (typeof selectedAPIs !== 'undefined' && Array.isArray(selectedAPIs) && selectedAPIs.length > 0)
+        ? selectedAPIs
+        : ['maotai'];
+
+    // 如果 searchByAPIAndKeyWord 不存在，直接返回 null（避免报错）
+    if (typeof searchByAPIAndKeyWord !== 'function') {
+        _doubanTitleToCoverCache.set(normalizedTitle, null);
+        return null;
+    }
+
+    // 为了避免请求风暴，这里做并发限制
+    const coverUrl = await _doubanEnqueueCoverTask(async () => {
+        for (const apiId of apiIds) {
+            try {
+                const results = await searchByAPIAndKeyWord(apiId, normalizedTitle);
+                if (Array.isArray(results) && results.length > 0) {
+                    const first = results[0];
+                    const pic = first?.vod_pic;
+                    if (typeof pic === 'string' && pic.startsWith('http')) {
+                        return pic;
+                    }
+                }
+            } catch (e) {
+                // 单个源失败不影响其他源
+            }
+        }
+        return null;
+    });
+
+    _doubanTitleToCoverCache.set(normalizedTitle, coverUrl);
+    return coverUrl;
+}
+
+function _doubanUpdateCoverImgByCardId(cardId, coverUrl) {
+    if (!cardId || !coverUrl) return;
+    const img = document.querySelector(`#douban-results [data-douban-card-id="${cardId}"] img[data-role="douban-cover"]`);
+    if (!img) return;
+
+    // 如果图片已经是同一个 URL 就不更新
+    if (img.getAttribute('src') === coverUrl) return;
+
+    img.onerror = null; // 避免循环触发
+    img.setAttribute('src', coverUrl);
+    img.classList.remove('object-contain');
+    img.classList.add('object-cover');
+}
+
 // 抽取渲染豆瓣卡片的逻辑到单独函数
 function renderDoubanCards(data, container) {
     // 创建文档片段以提高性能
     const fragment = document.createDocumentFragment();
-    
+
     // 如果没有数据
     if (!data.subjects || data.subjects.length === 0) {
         const emptyEl = document.createElement("div");
@@ -517,30 +623,29 @@ function renderDoubanCards(data, container) {
         data.subjects.forEach(item => {
             const card = document.createElement("div");
             card.className = "bg-[#111] hover:bg-[#222] transition-all duration-300 rounded-lg overflow-hidden flex flex-col transform hover:scale-105 shadow-md hover:shadow-lg";
-            
+
             // 生成卡片内容，确保安全显示（防止XSS）
             const safeTitle = item.title
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;');
-            
+                .replace(/\"/g, '&quot;');
+
             const safeRate = (item.rate || "暂无")
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;');
-            
-            // 处理图片URL
-            // 1. 直接使用豆瓣图片URL (添加no-referrer属性)
-            const originalCoverUrl = item.cover;
-            
-            // 2. 也准备代理URL作为备选
-            const proxiedCoverUrl = PROXY_URL + encodeURIComponent(originalCoverUrl);
-            
-            // 为不同设备优化卡片布局
+
+            // 封面：优先用视频源封面；渲染时先用占位图，随后异步替换
+            const cardId = `db_${doubanMovieTvCurrentSwitch}_${encodeURIComponent(item.title || '')}_${item.id || ''}`;
+            const placeholderCover = 'image/nomedia.png';
+
+            card.setAttribute('data-douban-card-id', cardId);
+
             card.innerHTML = `
                 <div class="relative w-full aspect-[2/3] overflow-hidden cursor-pointer" onclick="fillAndSearchWithDouban('${safeTitle}')">
-                    <img src="${originalCoverUrl}" alt="${safeTitle}" 
-                        class="w-full h-full object-cover transition-transform duration-500 hover:scale-110"
-                        onerror="this.onerror=null; this.src='${proxiedCoverUrl}'; this.classList.add('object-contain');"
+                    <img src="${placeholderCover}" alt="${safeTitle}" 
+                        class="w-full h-full object-contain bg-black transition-transform duration-500 hover:scale-110"
+                        data-role="douban-cover"
+                        onerror="this.onerror=null; this.src='image/nomedia.png'; this.classList.add('object-contain');"
                         loading="lazy" referrerpolicy="no-referrer">
                     <div class="absolute inset-0 bg-gradient-to-t from-black to-transparent opacity-60"></div>
                     <div class="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded-sm">
@@ -560,11 +665,20 @@ function renderDoubanCards(data, container) {
                     </button>
                 </div>
             `;
-            
+
             fragment.appendChild(card);
+
+            // 异步拉取视频源封面并替换（选第一个结果）
+            _doubanSearchFirstCoverFromVideoSources(item.title)
+                .then(coverUrl => {
+                    if (coverUrl) {
+                        _doubanUpdateCoverImgByCardId(cardId, coverUrl);
+                    }
+                })
+                .catch(() => {});
         });
     }
-    
+
     // 清空并添加所有新元素
     container.innerHTML = "";
     container.appendChild(fragment);
