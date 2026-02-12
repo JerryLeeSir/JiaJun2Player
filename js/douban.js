@@ -549,6 +549,24 @@ function _doubanNormalizeTitleForSearch(title) {
         .trim();
 }
 
+function _doubanNormalizeCoverUrl(url) {
+    if (!url) return null;
+    let u = String(url).trim();
+    if (!u) return null;
+
+    // 很多源会返回 //xx/xx.jpg
+    if (u.startsWith('//')) u = 'https:' + u;
+
+    // 极少数会返回 http:////xx
+    u = u.replace(/^http:\/\/+/, 'http://');
+    u = u.replace(/^https:\/\/+/, 'https://');
+
+    // 一些源会返回不带协议的相对路径，这里不擅自拼域名，直接放弃
+    if (!/^https?:\/\//i.test(u)) return null;
+
+    return u;
+}
+
 async function _doubanSearchFirstCoverFromVideoSources(title) {
     const normalizedTitle = _doubanNormalizeTitleForSearch(title);
     if (!normalizedTitle) return null;
@@ -575,8 +593,8 @@ async function _doubanSearchFirstCoverFromVideoSources(title) {
                 const results = await searchByAPIAndKeyWord(apiId, normalizedTitle);
                 if (Array.isArray(results) && results.length > 0) {
                     const first = results[0];
-                    const pic = first?.vod_pic;
-                    if (typeof pic === 'string' && pic.startsWith('http')) {
+                    const pic = _doubanNormalizeCoverUrl(first?.vod_pic);
+                    if (pic) {
                         return pic;
                     }
                 }
@@ -599,10 +617,22 @@ function _doubanUpdateCoverImgByCardId(cardId, coverUrl) {
     // 如果图片已经是同一个 URL 就不更新
     if (img.getAttribute('src') === coverUrl) return;
 
-    img.onerror = null; // 避免循环触发
+    // 保留兜底 onerror（避免封面 404 时图片裂开）
+    img.onerror = function () {
+        this.onerror = null;
+        this.src = 'image/nomedia.png';
+        this.classList.add('object-contain');
+    };
+
     img.setAttribute('src', coverUrl);
     img.classList.remove('object-contain');
     img.classList.add('object-cover');
+
+    // 仅在成功拿到封面时打印一次调试日志
+    if (!img.dataset.coverLogged) {
+        img.dataset.coverLogged = '1';
+        console.debug('[douban] cover replaced:', { cardId, coverUrl });
+    }
 }
 
 // 抽取渲染豆瓣卡片的逻辑到单独函数
