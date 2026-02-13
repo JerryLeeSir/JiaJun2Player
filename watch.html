@@ -7,7 +7,11 @@
     <title>正在跳转到播放器...</title>
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="css/watch.css">
-    <script src="js/watch.js"></script>
+    <script src="libs/sha256.min.js"></script>
+    <script>
+        window._jsSha256 = window.sha256;
+    </script>
+    <script src="js/built/watch.bundle.js"></script>
 </head>
 <body>
     <div class="redirect-container">

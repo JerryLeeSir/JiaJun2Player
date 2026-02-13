@@ -223,17 +223,12 @@
         window._jsSha256 = window.sha256;
     </script>
     
-    <script src="libs/hls.min.js" crossorigin="anonymous"></script>
-    <script src="libs/artplayer.min.js" crossorigin="anonymous"></script>
+    <!-- 保留第三方库 -->
+    <script src="libs/hls.min.js"></script>
+    <script src="libs/artplayer.min.js"></script>
 
-    <script src="js/config.js"></script>
-    <script src="js/proxy-auth.js"></script>
-    <script src="js/customer_site.js"></script>
-    <script src="js/password.js"></script>
-    <script src="js/ui.js"></script>
-    <script src="js/api.js"></script>
-    <script src="js/search.js"></script>
-    <script src="js/player.js"></script>
+    <!-- 预编译 JS -->
+    <script src="js/built/player.bundle.js"></script>
 
     <script>
         // 创建全局环境变量对象
