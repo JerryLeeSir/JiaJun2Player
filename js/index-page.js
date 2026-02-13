@@ -1,21 +1,30 @@
-// 页面加载后显示弹窗脚本
-document.addEventListener('DOMContentLoaded', function() {
-    // 弹窗显示脚本
-    // 检查用户是否已经看过声明
+// 页面加载后显示弹窗脚本（先访问验证，再使用声明）
+function showDisclaimerIfNeeded() {
     const hasSeenDisclaimer = localStorage.getItem('hasSeenDisclaimer');
-    
-    if (!hasSeenDisclaimer) {
-        // 显示弹窗
-        const disclaimerModal = document.getElementById('disclaimerModal');
-        disclaimerModal.style.display = 'flex';
-        
-        // 添加接受按钮事件
-        document.getElementById('acceptDisclaimerBtn').addEventListener('click', function() {
-            // 保存用户已看过声明的状态
+    if (hasSeenDisclaimer) return;
+    const disclaimerModal = document.getElementById('disclaimerModal');
+    if (!disclaimerModal) return;
+    disclaimerModal.style.display = 'flex';
+    disclaimerModal.style.visibility = 'visible';
+    // 确保只绑定一次
+    const btn = document.getElementById('acceptDisclaimerBtn');
+    if (btn && !btn._disclaimerBound) {
+        btn._disclaimerBound = true;
+        btn.addEventListener('click', function() {
             localStorage.setItem('hasSeenDisclaimer', 'true');
-            // 隐藏弹窗
             disclaimerModal.style.display = 'none';
         });
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // 弹窗顺序：需要密码时先显示访问验证，通过后再显示使用声明；不需要密码时直接显示使用声明
+    const needPassword = window.isPasswordProtected && window.isPasswordProtected() && window.isPasswordVerified && !window.isPasswordVerified();
+    if (needPassword) {
+        // 由 password.js 显示访问验证弹窗，验证成功后通过 passwordVerified 事件再显示声明
+        document.addEventListener('passwordVerified', showDisclaimerIfNeeded, { once: true });
+    } else {
+        showDisclaimerIfNeeded();
     }
 
     // URL搜索参数处理脚本

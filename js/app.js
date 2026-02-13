@@ -614,12 +614,15 @@ async function search() {
             if (window.isPasswordProtected && window.isPasswordVerified) {
                 if (window.isPasswordProtected() && !window.isPasswordVerified()) {
                     showPasswordModal && showPasswordModal();
+                    showToast('请先完成访问验证后再搜索', 'error');
                     return;
                 }
             }
         }
     } catch (error) {
         console.warn('Password protection check failed:', error.message);
+        showPasswordModal && showPasswordModal();
+        showToast('请先完成访问验证后再搜索', 'error');
         return;
     }
     const query = document.getElementById('searchInput').value.trim();
@@ -803,7 +806,11 @@ async function search() {
         if (error.name === 'AbortError') {
             showToast('搜索请求超时，请检查网络连接', 'error');
         } else {
-            showToast('搜索请求失败，请稍后重试', 'error');
+            var msg = '搜索请求失败，请稍后重试';
+            if (window.isPasswordProtected && window.isPasswordVerified && window.isPasswordProtected() && !window.isPasswordVerified()) {
+                msg = '请先完成访问验证后再搜索';
+            }
+            showToast(msg, 'error');
         }
     } finally {
         hideLoading();
