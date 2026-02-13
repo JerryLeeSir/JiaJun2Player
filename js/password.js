@@ -40,15 +40,25 @@ function ensurePasswordProtection() {
 window.isPasswordProtected = isPasswordProtected;
 window.isPasswordRequired = isPasswordRequired;
 
+// 可选：打开电视端调试
+const PASSWORD_DEBUG = false;
+function pwdLog(...args) {
+    if (PASSWORD_DEBUG && typeof console !== 'undefined' && console.log) {
+        console.log('[password]', ...args);
+    }
+}
+
 /**
  * 验证用户输入的密码是否正确（异步，使用SHA-256哈希）
  */
 async function verifyPassword(password) {
     try {
         const correctHash = window.__ENV__?.PASSWORD;
+        pwdLog('env password hash present:', !!correctHash, 'len:', correctHash ? correctHash.length : 0);
         if (!correctHash) return false;
 
         const inputHash = await sha256(password);
+        pwdLog('input hash:', inputHash);
         const isValid = inputHash === correctHash;
 
         if (isValid) {
@@ -93,18 +103,34 @@ window.ensurePasswordProtection = ensurePasswordProtection;
 window.showPasswordModal = showPasswordModal;
 window.hidePasswordModal = hidePasswordModal;
 
-// SHA-256实现，可用Web Crypto API
+// SHA-256实现：优先使用 libs/sha256.min.js（window._jsSha256），避免电视端 WebCrypto/TextEncoder 兼容性问题
 async function sha256(message) {
-    if (window.crypto && crypto.subtle && crypto.subtle.digest) {
-        const msgBuffer = new TextEncoder().encode(message);
-        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    }
-    // HTTP 下调用原始 js‑sha256
+    // 1) 优先走原始 js-sha256（同步实现，兼容性最好）
     if (typeof window._jsSha256 === 'function') {
+        pwdLog('sha256 via window._jsSha256');
         return window._jsSha256(message);
     }
+
+    // 2) 其次尝试 Web Crypto API
+    if (window.crypto && crypto.subtle && crypto.subtle.digest) {
+        // TextEncoder 在部分电视端可能不存在
+        let msgBuffer;
+        if (typeof TextEncoder !== 'undefined') {
+            msgBuffer = new TextEncoder().encode(message);
+        } else {
+            // 简易 UTF-8 编码降级（覆盖常用 ASCII/中文场景）
+            const utf8 = unescape(encodeURIComponent(message));
+            const arr = new Uint8Array(utf8.length);
+            for (let i = 0; i < utf8.length; i++) arr[i] = utf8.charCodeAt(i);
+            msgBuffer = arr;
+        }
+
+        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        pwdLog('sha256 via crypto.subtle');
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
     throw new Error('No SHA-256 implementation available.');
 }
 
@@ -114,9 +140,12 @@ async function sha256(message) {
 function showPasswordModal() {
     const passwordModal = document.getElementById('passwordModal');
     if (passwordModal) {
-        // 防止出现豆瓣区域滚动条
-        document.getElementById('doubanArea').classList.add('hidden');
-        document.getElementById('passwordCancelBtn').classList.add('hidden');
+        // 防止出现豆瓣区域滚动条（部分页面可能没有该元素）
+        const doubanArea = document.getElementById('doubanArea');
+        if (doubanArea) doubanArea.classList.add('hidden');
+
+        const cancelBtn = document.getElementById('passwordCancelBtn');
+        if (cancelBtn) cancelBtn.classList.add('hidden');
 
         // 检查是否需要强制设置密码
         if (isPasswordRequired()) {
@@ -146,6 +175,7 @@ function showPasswordModal() {
             if (form) form.style.display = 'block';
         }
 
+        // 兼容 index.html 可能被内联脚本 removeAttribute('class') 的情况：始终以 style 为准
         passwordModal.style.display = 'flex';
         passwordModal.style.visibility = 'visible';
         passwordModal.classList.remove('hidden');
@@ -177,10 +207,10 @@ function hidePasswordModal() {
         const passwordInput = document.getElementById('passwordInput');
         if (passwordInput) passwordInput.value = '';
 
-        // 兼容两种弹窗实现（index.html 内联样式 / player.html tailwind class）
+        // index.html 里可能把 class 全移除了（removeAttribute('class')），此处强制写回 hidden
         passwordModal.style.display = 'none';
         passwordModal.style.visibility = 'hidden';
-        passwordModal.classList.add('hidden');
+        passwordModal.setAttribute('class', 'hidden');
         passwordModal.setAttribute('aria-hidden', 'true');
 
         // 如果启用豆瓣区域则显示豆瓣区域
