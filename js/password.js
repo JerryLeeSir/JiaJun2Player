@@ -231,12 +231,16 @@ async function handlePasswordSubmit() {
  * 初始化密码验证系统
  */
 function initPasswordProtection() {
+    // 如果设置了密码但用户已验证，确保弹窗被关闭（兼容内联脚本已显示的情况）
+    if (isPasswordProtected() && isPasswordVerified()) {
+        hidePasswordModal();
+        return;
+    }
     // 如果需要强制设置密码，显示警告弹窗
     if (isPasswordRequired()) {
         showPasswordModal();
         return;
     }
-    
     // 如果设置了密码但用户未验证，显示密码输入框
     if (isPasswordProtected() && !isPasswordVerified()) {
         showPasswordModal();

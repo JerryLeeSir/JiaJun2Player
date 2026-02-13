@@ -18,6 +18,23 @@
     <link rel="stylesheet" href="css/index.css">
 </head>
 <body class="page-bg text-white">
+    <!-- 访问验证弹窗：放在 body 最前、内联样式，电视端不依赖外部 CSS 也能显示 -->
+    <div id="passwordModal" style="display:none;position:fixed;left:0;top:0;right:0;bottom:0;z-index:99999;background:rgba(0,0,0,0.95);align-items:center;justify-content:center;" class="hidden">
+        <div style="background:#111;padding:2rem;border-radius:0.5rem;width:91%;max-width:28rem;border:1px solid #333;">
+            <h2 style="font-size:1.5rem;font-weight:700;margin-bottom:1rem;background:linear-gradient(to right,#00ccff,#ff3c78);-webkit-background-clip:text;background-clip:text;color:transparent;">访问验证</h2>
+            <p style="color:#d1d5db;margin-bottom:1rem;">请输入密码继续访问</p>
+            <form id="passwordForm" onsubmit="handlePasswordSubmit(); return false;">
+                <input type="text" name="username" id="username" autocomplete="username" style="display:none" tabindex="-1" aria-hidden="true">
+                <input type="password" id="passwordInput" style="width:100%;background:#111;border:1px solid #333;color:#fff;padding:0.75rem 1rem;border-radius:0.5rem;margin-bottom:1rem;box-sizing:border-box;" placeholder="密码..." autocomplete="new-password">
+                <div style="display:flex;gap:0.5rem;margin-top:1rem;">
+                    <button id="passwordSubmitBtn" type="submit" style="flex:1;background:#2563eb;color:#fff;padding:0.5rem 1rem;border-radius:0.25rem;border:none;cursor:pointer;">提交</button>
+                    <button id="passwordCancelBtn" type="button" onclick="hidePasswordModal()" style="flex:1;background:#2563eb;color:#fff;padding:0.5rem 1rem;border-radius:0.25rem;border:none;cursor:pointer;">取消</button>
+                </div>
+            </form>
+            <p id="passwordError" style="color:#ef4444;margin-top:0.5rem;display:none;">密码错误，请重试</p>
+        </div>
+    </div>
+
     <!-- 将历史记录按钮移到左上角，并缩小尺寸 -->
     <div class="fixed top-4 left-4 z-10">
         <button onclick="toggleHistory(event)" class="bg-[#222] hover:bg-[#333] border border-[#333] hover:border-white rounded-lg px-3 py-1.5 transition-colors" aria-label="观看历史">
@@ -331,27 +348,6 @@
         </div>
     </div>
 
-    <!-- 密码验证弹窗（z-index 高于使用声明，电视端也优先显示） -->
-    <div id="passwordModal" class="fixed inset-0 bg-black/95 hidden items-center justify-center z-[100] transition-opacity duration-300">
-        <div class="bg-[#111] p-8 rounded-lg w-11/12 max-w-md border border-[#333] max-h-[90vh] flex flex-col">
-            <div class="flex justify-between items-center mb-6 flex-none">
-                <h2 class="text-2xl font-bold gradient-text">访问验证</h2>
-            </div>
-            <div class="mb-6">
-                <p class="text-gray-300 mb-4">请输入密码继续访问</p>
-                <form id="passwordForm" onsubmit="handlePasswordSubmit(); return false;">
-                    <input type="text" name="username" id="username" autocomplete="username" style="display:none" tabindex="-1" aria-hidden="true">
-                    <input type="password" id="passwordInput" class="w-full bg-[#111] border border-[#333] text-white px-4 py-3 rounded-lg focus:outline-none focus:border-white transition-colors" placeholder="密码..." autocomplete="new-password">
-                    <div class="mt-4 w-full flex space-x-4">
-                        <button id="passwordSubmitBtn" type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">提交</button>
-                        <button id="passwordCancelBtn" type="button" onclick="hidePasswordModal()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">取消</button>
-                    </div>
-                </form>
-                <p id="passwordError" class="text-red-500 mt-2 hidden">密码错误，请重试</p>
-            </div>
-        </div>
-    </div>
-
     <!-- 错误提示框 -->
     <div id="toast" class="fixed top-4 left-1/2 -translate-x-1/2 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg transform transition-all duration-300 opacity-0 -translate-y-full z-50">
         <p id="toastMessage"></p>
@@ -400,14 +396,21 @@
     <!-- PWA 注册 -->
     <script src="js/pwa-register.js"></script>
 
-    <!-- 环境变量注入脚本 -->
+    <!-- 环境变量注入脚本 + 电视端立即显示访问验证（不依赖外部 JS 加载顺序） -->
     <script>
-        // 创建全局环境变量对象
         window.__ENV__ = window.__ENV__ || {};
-        
-        // 注入服务器端环境变量 (将由服务器端替换)
-        // PASSWORD 变量将在这里被服务器端注入
         window.__ENV__.PASSWORD = "{{PASSWORD}}";
+        (function() {
+            var p = window.__ENV__.PASSWORD;
+            if (typeof p === 'string' && p.length === 64 && /^[a-f0-9]+$/i.test(p)) {
+                var el = document.getElementById('passwordModal');
+                if (el) {
+                    el.style.display = 'flex';
+                    el.style.visibility = 'visible';
+                    el.removeAttribute('class');
+                }
+            }
+        })();
     </script>
 
     <!-- 版本检测脚本 -->
