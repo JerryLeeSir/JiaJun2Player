@@ -177,12 +177,19 @@ function hidePasswordModal() {
         const passwordInput = document.getElementById('passwordInput');
         if (passwordInput) passwordInput.value = '';
 
+        // 兼容两种弹窗实现（index.html 内联样式 / player.html tailwind class）
         passwordModal.style.display = 'none';
+        passwordModal.style.visibility = 'hidden';
+        passwordModal.classList.add('hidden');
+        passwordModal.setAttribute('aria-hidden', 'true');
 
         // 如果启用豆瓣区域则显示豆瓣区域
         if (localStorage.getItem('doubanEnabled') === 'true') {
-            document.getElementById('doubanArea').classList.remove('hidden');
-            initDouban();
+            const doubanArea = document.getElementById('doubanArea');
+            if (doubanArea) doubanArea.classList.remove('hidden');
+            if (typeof initDouban === 'function') {
+                initDouban();
+            }
         }
     }
 }
@@ -194,6 +201,8 @@ function showPasswordError() {
     const errorElement = document.getElementById('passwordError');
     if (errorElement) {
         errorElement.classList.remove('hidden');
+        // index.html 里用的是 display:none
+        errorElement.style.display = 'block';
     }
 }
 
@@ -204,6 +213,8 @@ function hidePasswordError() {
     const errorElement = document.getElementById('passwordError');
     if (errorElement) {
         errorElement.classList.add('hidden');
+        // index.html 里用的是 display:none
+        errorElement.style.display = 'none';
     }
 }
 
@@ -218,7 +229,10 @@ async function handlePasswordSubmit(event) {
 
     const passwordInput = document.getElementById('passwordInput');
     const password = passwordInput ? passwordInput.value.trim() : '';
-    if (await verifyPassword(password)) {
+
+    // 校验成功时确保立即关闭弹窗（哪怕事件派发/后续逻辑失败）
+    const ok = await verifyPassword(password);
+    if (ok) {
         hidePasswordModal();
 
         // 触发密码验证成功事件（部分电视浏览器不支持 CustomEvent）
