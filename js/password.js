@@ -210,14 +210,30 @@ function hidePasswordError() {
 /**
  * 处理密码提交事件（异步）
  */
-async function handlePasswordSubmit() {
+async function handlePasswordSubmit(event) {
+    // 兼容内联 onsubmit 和 addEventListener
+    if (event && typeof event.preventDefault === 'function') {
+        event.preventDefault();
+    }
+
     const passwordInput = document.getElementById('passwordInput');
     const password = passwordInput ? passwordInput.value.trim() : '';
     if (await verifyPassword(password)) {
         hidePasswordModal();
 
-        // 触发密码验证成功事件
-        document.dispatchEvent(new CustomEvent('passwordVerified'));
+        // 触发密码验证成功事件（部分电视浏览器不支持 CustomEvent）
+        try {
+            if (typeof window.CustomEvent === 'function') {
+                document.dispatchEvent(new CustomEvent('passwordVerified'));
+            } else {
+                const evt = document.createEvent('Event');
+                evt.initEvent('passwordVerified', true, true);
+                document.dispatchEvent(evt);
+            }
+        } catch (e) {
+            // 忽略事件派发失败，避免影响主流程
+            console.warn('dispatch passwordVerified event failed:', e);
+        }
     } else {
         showPasswordError();
         if (passwordInput) {
@@ -226,6 +242,9 @@ async function handlePasswordSubmit() {
         }
     }
 }
+
+// 显式暴露到全局，确保内联 onsubmit="handlePasswordSubmit()" 在老旧浏览器可用
+window.handlePasswordSubmit = handlePasswordSubmit;
 
 /**
  * 初始化密码验证系统
@@ -249,6 +268,13 @@ function initPasswordProtection() {
 }
 
 // 在页面加载完成后初始化密码保护
+// 同时绑定表单 submit 事件，避免部分电视端对内联事件/异步处理兼容性问题
 document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('passwordForm');
+    if (form && !form.__passwordBound) {
+        form.addEventListener('submit', handlePasswordSubmit);
+        form.__passwordBound = true;
+    }
+
     initPasswordProtection();
 });
