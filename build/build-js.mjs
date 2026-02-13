@@ -25,9 +25,9 @@ await esbuild.build({
   sourcemap: isProd ? false : 'inline',
   minify: isProd,
   logLevel: 'info',
-  // Keep original public paths as-is
+  // 避免把 js/sha256.js 打进 bundle（它依赖 TextEncoder/crypto.subtle，老电视端可能不可用）
+  external: ['js/sha256.js', './js/sha256.js', 'sha256.js', './sha256.js'],
   loader: {
     '.js': 'js',
   },
 });
-

@@ -54,12 +54,16 @@ function sha256Hash(input) {
 
 async function renderPage(filePath, password) {
   let content = fs.readFileSync(filePath, 'utf8');
+  const placeholder = '"{{PASSWORD}}"';
+
   if (password !== '') {
     const sha256 = await sha256Hash(password);
-    content = content.replace('{{PASSWORD}}', sha256);
+    // 只替换带引号的占位符，避免误伤其它内容
+    content = content.split(placeholder).join(`"${sha256}"`);
   } else {
-    content = content.replace('{{PASSWORD}}', '');
+    content = content.split(placeholder).join('""');
   }
+
   return content;
 }
 
