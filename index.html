@@ -392,10 +392,10 @@
     <!-- 环境变量注入脚本 + 电视端立即显示访问验证（不依赖外部 JS 加载顺序） -->
     <script>
         (function () {
-            var env = window.__ENV__ || (window.__ENV__ = {});
-            env.PASSWORD = "{{PASSWORD}}";
+            if (!window.__ENV__) window.__ENV__ = {};
+            window.__ENV__.PASSWORD = "{{PASSWORD}}";
 
-            var p = env.PASSWORD;
+            var p = window.__ENV__.PASSWORD;
             if (typeof p === 'string' && p.length === 64 && /^[a-f0-9]+$/i.test(p)) {
                 var el = document.getElementById('passwordModal');
                 if (el) {
