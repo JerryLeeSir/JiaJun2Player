@@ -18,13 +18,26 @@ function showDisclaimerIfNeeded() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    // 弹窗顺序：需要密码时先显示访问验证，通过后再显示使用声明；不需要密码时直接显示使用声明
-    const needPassword = window.isPasswordProtected && window.isPasswordProtected() && window.isPasswordVerified && !window.isPasswordVerified();
-    if (needPassword) {
-        // 由 password.js 显示访问验证弹窗，验证成功后通过 passwordVerified 事件再显示声明
-        document.addEventListener('passwordVerified', showDisclaimerIfNeeded, { once: true });
+    // 弹窗顺序：需要密码时先显示访问验证，通过后再显示使用声明。延迟一帧执行，确保 password.js 已初始化（电视端脚本顺序可能不同）
+    function runModalOrder() {
+        var needPassword = window.isPasswordProtected && typeof window.isPasswordProtected === 'function' &&
+            window.isPasswordVerified && typeof window.isPasswordVerified === 'function' &&
+            window.isPasswordProtected() && !window.isPasswordVerified();
+        if (needPassword) {
+            var disc = document.getElementById('disclaimerModal');
+            if (disc) { disc.style.display = 'none'; disc.classList.add('hidden'); }
+            document.addEventListener('passwordVerified', showDisclaimerIfNeeded, { once: true });
+            if (typeof window.showPasswordModal === 'function') {
+                window.showPasswordModal();
+            }
+        } else {
+            showDisclaimerIfNeeded();
+        }
+    }
+    if (window.showPasswordModal) {
+        runModalOrder();
     } else {
-        showDisclaimerIfNeeded();
+        setTimeout(runModalOrder, 50);
     }
 
     // URL搜索参数处理脚本

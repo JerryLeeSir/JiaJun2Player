@@ -90,6 +90,8 @@ window.isPasswordRequired = isPasswordRequired;
 window.isPasswordVerified = isPasswordVerified;
 window.verifyPassword = verifyPassword;
 window.ensurePasswordProtection = ensurePasswordProtection;
+window.showPasswordModal = showPasswordModal;
+window.hidePasswordModal = hidePasswordModal;
 
 // SHA-256实现，可用Web Crypto API
 async function sha256(message) {
@@ -145,6 +147,9 @@ function showPasswordModal() {
         }
 
         passwordModal.style.display = 'flex';
+        passwordModal.style.visibility = 'visible';
+        passwordModal.classList.remove('hidden');
+        passwordModal.setAttribute('aria-hidden', 'false');
 
         // 只有在非强制设置密码模式下才聚焦输入框
         if (!isPasswordRequired()) {
