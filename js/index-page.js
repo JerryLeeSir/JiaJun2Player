@@ -1,43 +1,17 @@
-// 页面加载后显示弹窗脚本（先访问验证，再使用声明）
-function showDisclaimerIfNeeded() {
-    const hasSeenDisclaimer = localStorage.getItem('hasSeenDisclaimer');
-    if (hasSeenDisclaimer) return;
-    const disclaimerModal = document.getElementById('disclaimerModal');
-    if (!disclaimerModal) return;
-    disclaimerModal.style.display = 'flex';
-    disclaimerModal.style.visibility = 'visible';
-    // 确保只绑定一次
-    const btn = document.getElementById('acceptDisclaimerBtn');
-    if (btn && !btn._disclaimerBound) {
-        btn._disclaimerBound = true;
-        btn.addEventListener('click', function() {
-            localStorage.setItem('hasSeenDisclaimer', 'true');
-            disclaimerModal.style.display = 'none';
-        });
-    }
-}
-
+// 页面加载后：需要访问验证时显示验证弹窗（延迟执行以兼容电视端脚本顺序）
 document.addEventListener('DOMContentLoaded', function() {
-    // 弹窗顺序：需要密码时先显示访问验证，通过后再显示使用声明。延迟一帧执行，确保 password.js 已初始化（电视端脚本顺序可能不同）
-    function runModalOrder() {
+    function showAccessModalIfNeeded() {
         var needPassword = window.isPasswordProtected && typeof window.isPasswordProtected === 'function' &&
             window.isPasswordVerified && typeof window.isPasswordVerified === 'function' &&
             window.isPasswordProtected() && !window.isPasswordVerified();
-        if (needPassword) {
-            var disc = document.getElementById('disclaimerModal');
-            if (disc) { disc.style.display = 'none'; disc.classList.add('hidden'); }
-            document.addEventListener('passwordVerified', showDisclaimerIfNeeded, { once: true });
-            if (typeof window.showPasswordModal === 'function') {
-                window.showPasswordModal();
-            }
-        } else {
-            showDisclaimerIfNeeded();
+        if (needPassword && typeof window.showPasswordModal === 'function') {
+            window.showPasswordModal();
         }
     }
     if (window.showPasswordModal) {
-        runModalOrder();
+        showAccessModalIfNeeded();
     } else {
-        setTimeout(runModalOrder, 50);
+        setTimeout(showAccessModalIfNeeded, 50);
     }
 
     // URL搜索参数处理脚本
