@@ -1,0 +1,4 @@
+/* Tailwind 预编译入口 - 由 npm run build:css 生成 tailwind-built.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
